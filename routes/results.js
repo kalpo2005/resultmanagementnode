@@ -1,13 +1,14 @@
 const express = require('express');
 const { launchBrowser } = require('../browser');
 const { parseResultTable } = require('../parser');
+const PQueue = require('p-queue').default;
+const { sendMail } = require('../mailer');
 
 const router = express.Router();
 
-// Helper function to call Laravel API using native fetch
+// Helper to call Laravel API
 async function callLaravelApi(payload) {
     const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
-
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -16,10 +17,7 @@ async function callLaravelApi(payload) {
         });
 
         const data = await response.json();
-
-        if (!response.ok) {
-            return { success: false, error: data };
-        }
+        if (!response.ok) return { success: false, error: data };
 
         return { success: true, data };
     } catch (error) {
@@ -27,84 +25,117 @@ async function callLaravelApi(payload) {
     }
 }
 
-router.post('/', async (req, res) => {
-    const { students } = req.body;
+// Background processing
+async function processStudents(students) {
+    const queue = new PQueue({ concurrency: 5 });
+    const failedEnrollments = [];
+    let successCount = 0;
 
-    if (!students || !Array.isArray(students)) {
-        return res.status(400).json({ status: false, message: 'Students array is required' });
-    }
+    const browser = await launchBrowser();
 
-    let browser;
-    try {
-        browser = await launchBrowser();
-
-        const results = await Promise.all(
-            students.map(async (student) => {
+    await Promise.all(
+        students.map(student =>
+            queue.add(async () => {
                 const { enrollment, seatnumber, studentId, semesterId } = student;
                 const page = await browser.newPage();
-                const url = 'https://www.mkbhavuni.edu.in/bhavuni_result/result.php';
-
-                await page.goto(url, { waitUntil: 'networkidle2' });
-
-                await page.type('#sid', String(enrollment));
-                await page.type('#seat_no', String(seatnumber));
-                await page.click('input[name="search_seat_no"][value="View Result"]');
 
                 try {
-                    // Wait for the first result table
-                    await page.waitForSelector('table.print1', { timeout: 10000 });
+                    const url = 'https://www.mkbhavuni.edu.in/bhavuni_result/result.php';
+                    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-                    // Get full page content
-                    const pageContent = await page.content();
+                    // detect correct frame
+                    let frame = page.mainFrame();
+                    if (page.frames().length > 1) {
+                        frame = page.frames().find(f => f.url().includes('result.php')) || frame;
+                    }
 
-                    // Parse the HTML to extract student info + result data
+                    // fill form
+                    await frame.waitForSelector('#sid', { timeout: 10000 });
+                    await frame.type('#sid', String(enrollment));
+
+                    await frame.waitForSelector('#seat_no', { timeout: 10000 });
+                    await frame.type('#seat_no', String(seatnumber));
+
+                    await frame.click('input[name="search_seat_no"][value="View Result"]');
+
+                    // ✅ Race between result table OR error container
+                    await Promise.race([
+                        frame.waitForSelector('table.print1', { timeout: 8000 }).catch(() => null),
+                        frame.waitForSelector('#printContainer', { timeout: 8000 }).catch(() => null)
+                    ]);
+
+                    const pageContent = await frame.content();
+
+                    // 🔎 Explicit invalid check
+                    if (pageContent.includes('Invalid SID') || pageContent.includes('Invalid Seat Number')) {
+                        console.log(`❌ Invalid result for ${enrollment} / ${seatnumber}`);
+                        failedEnrollments.push({ enrollment, seatnumber });
+                        return;
+                    }
+
+                    // ✅ Check if result table exists
+                    if (!pageContent.includes('table.print1')) {
+                        console.log(`❌ No result table found for ${enrollment} / ${seatnumber}`);
+                        failedEnrollments.push({ enrollment, seatnumber });
+                        return;
+                    }
+
+                    // Parse valid result
                     const parsedData = parseResultTable(pageContent);
 
-                    // Prepare payload for Laravel API
                     const payload = {
                         seatnumber,
                         studentId,
                         semesterId,
-                        examTypeId: parsedData.student.examTypeId || 1, // default/fallback
+                        examTypeId: parsedData.student.examTypeId || 1,
                         subjects: parsedData.subjects
                     };
 
-                    // Call Laravel API
                     const apiResponse = await callLaravelApi(payload);
 
-                    return {
-                        enrollment,
-                        seatnumber,
-                        studentId,
-                        semesterId,
-                        // parsedData,
-                        // apiResponse
-                        message:"data inserted successfully"
-                    };
+                    if (apiResponse.success) {
+                        successCount++;
+                    } else {
+                        failedEnrollments.push({ enrollment, seatnumber });
+                    }
 
                 } catch (err) {
-                    console.error(`Error fetching result for ${seatnumber}:`, err.message);
-                    return {
-                        enrollment,
-                        seatnumber,
-                        studentId,
-                        semesterId,
-                        parsedData: null,
-                        apiResponse: { success: false, error: err.message }
-                    };
+                    console.error(`❌ Error for ${enrollment}: ${err.message}`);
+                    failedEnrollments.push({ enrollment, seatnumber });
                 } finally {
                     await page.close();
                 }
             })
-        );
+        )
+    );
 
-        res.json({ status: true, students: results });
-    } catch (error) {
-        console.error('❌ Error:', error);
-        res.status(500).json({ status: false, error: error.message });
-    } finally {
-        if (browser) await browser.close();
+    await browser.close();
+
+    console.log(`✅ Done: ${successCount}, ❌ Failed: ${failedEnrollments.length}`);
+
+    if (failedEnrollments.length) {
+        const message = failedEnrollments
+            .map(f => `Enrollment: ${f.enrollment}, Seat: ${f.seatnumber}`)
+            .join('\n');
+
+        await sendMail('❌ Failed Student Results', message);
+    } else {
+        await sendMail('✅ All Students Processed Successfully', `Total: ${successCount}`);
     }
+}
+
+// API route
+router.post('/', async (req, res) => {
+    const { students } = req.body;
+    if (!students || !Array.isArray(students)) {
+        return res.status(400).json({ status: false, message: 'Students array is required' });
+    }
+
+    // Immediate response
+    res.json({ status: true, message: 'Processing started in background', total: students.length });
+
+    // Run background process (don’t await here)
+    processStudents(students).catch(err => console.error('Queue Error:', err));
 });
 
 module.exports = router;
