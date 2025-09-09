@@ -11,7 +11,16 @@ function parseResultTable(html) {
 
         if (th.includes('Student Name')) studentDetails.name = td;
         if (th.includes('College')) studentDetails.college = td;
-        if (th.includes('Seat Number')) studentDetails.seatInfo = td;
+        if (th.includes('Seat Number')) {
+            const parts = td.split('|').map(p => p.trim());
+            // Safe parsing
+            studentDetails.seatnumber = parts[0] || null;
+            const uniqueMatch = td.match(/Unique ID:\s*([0-9]+)/);
+            studentDetails.enrollment = uniqueMatch ? uniqueMatch[1] : null;
+            const abcMatch = td.match(/ABC ID:\s*([0-9]+)/);
+            studentDetails.abcId = abcMatch ? abcMatch[1] : null;
+        }
+
         if (th.includes('Programme')) studentDetails.programme = td;
         if (th.includes('Examination held in')) studentDetails.examHeldIn = td;
         if (th.includes('Exam Type')) studentDetails.examType = td;
@@ -35,14 +44,14 @@ function parseResultTable(html) {
                 // TOTAL row
                 if ($(cols[0]).text().trim().toLowerCase().includes('total')) {
                     totalMarks = {
-                        total_credits: $(cols[3]).text().trim(),
-                        cce_max_min: $(cols[4]).text().trim(),
-                        cce_obtained: $(cols[5]).text().trim(),
-                        see_max_min: $(cols[6]).text().trim(),
-                        see_obtained: $(cols[7]).text().trim(),
-                        total_max_min: $(cols[8]).text().trim(),
-                        total_obtained: $(cols[9]).text().trim(),
-                        total_credit_points: $(cols[13]).text().trim()
+                        total_credits: $(cols[1]).text().trim(),
+                        cce_max_min: $(cols[2]).text().trim(),
+                        cce_obtained: $(cols[3]).text().trim(),
+                        see_max_min: $(cols[4]).text().trim(),
+                        see_obtained: $(cols[5]).text().trim(),
+                        total_max_min: $(cols[6]).text().trim(),
+                        total_obtained: $(cols[7]).text().trim(),
+                        total_credit_points: $(cols[9]).text().trim()
                     };
                     return;
                 }

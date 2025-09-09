@@ -7,23 +7,32 @@ const { sendMail } = require('../mailer');
 const router = express.Router();
 
 // Helper to call Laravel API
-async function callLaravelApi(payload) {
+async function callLaravelApi(payload, timeoutMs = 10000) {
     const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+
+        clearTimeout(timeout);
 
         const data = await response.json();
         if (!response.ok) return { success: false, error: data };
 
         return { success: true, data };
     } catch (error) {
-        return { success: false, error: error.message };
+        clearTimeout(timeout);
+        return { success: false, error: error.message || 'Laravel API timeout' };
     }
 }
+
 
 // Background processing
 async function processStudents(students) {
@@ -36,7 +45,7 @@ async function processStudents(students) {
     await Promise.all(
         students.map(student =>
             queue.add(async () => {
-                const { enrollment, seatnumber, studentId, semesterId } = student;
+                const { enrollment, seatnumber, resultId, studentId, semesterId } = student;
                 const page = await browser.newPage();
 
                 try {
@@ -58,40 +67,45 @@ async function processStudents(students) {
 
                     await frame.click('input[name="search_seat_no"][value="View Result"]');
 
-                    // ✅ Race between result table OR error container
-                    await Promise.race([
-                        frame.waitForSelector('table.print1', { timeout: 8000 }).catch(() => null),
-                        frame.waitForSelector('#printContainer', { timeout: 8000 }).catch(() => null)
+                    // ✅ Race between result table and error message
+                    const resultOrError = await Promise.race([
+                        frame.waitForSelector('table.print1', { timeout: 10000 }).then(() => 'table').catch(() => null),
+                        frame.waitForSelector('#printContainer', { timeout: 10000 }).then(() => 'printContainer').catch(() => null)
                     ]);
 
                     const pageContent = await frame.content();
 
-                    // 🔎 Explicit invalid check
-                    if (pageContent.includes('Invalid SID') || pageContent.includes('Invalid Seat Number')) {
-                        console.log(`❌ Invalid result for ${enrollment} / ${seatnumber}`);
+                    if (resultOrError === 'printContainer') {
+                        // Check if error text is shown
+                        if (pageContent.includes('Invalid SID') || pageContent.includes('Invalid Seat Number')) {
+                            console.log(`❌ Invalid result for ${enrollment} / ${seatnumber}`);
+                            failedEnrollments.push({ enrollment, seatnumber });
+                            return; // skip API call
+                        }
+                    }
+
+                    if (resultOrError !== 'table') {
+                        console.log(`❌ No result table for ${enrollment} / ${seatnumber}`);
                         failedEnrollments.push({ enrollment, seatnumber });
                         return;
                     }
 
-                    // ✅ Check if result table exists
-                    if (!pageContent.includes('table.print1')) {
-                        console.log(`❌ No result table found for ${enrollment} / ${seatnumber}`);
-                        failedEnrollments.push({ enrollment, seatnumber });
-                        return;
-                    }
-
-                    // Parse valid result
+                    // ✅ Parse valid result
                     const parsedData = parseResultTable(pageContent);
 
                     const payload = {
                         seatnumber,
+                        resultId,
                         studentId,
                         semesterId,
                         examTypeId: parsedData.student.examTypeId || 1,
-                        subjects: parsedData.subjects
+                        student: parsedData.student,
+                        subjects: parsedData.subjects,
+                        result: parsedData.result
                     };
 
                     const apiResponse = await callLaravelApi(payload);
+                    // console.log('📥 Laravel Response:', apiResponse);
 
                     if (apiResponse.success) {
                         successCount++;
