@@ -25,7 +25,6 @@ async function callLaravelApi(payload, timeoutMs = 10000) {
 
         const data = await response.json();
         if (!response.ok) return { success: false, error: data };
-
         return { success: true, data };
     } catch (error) {
         clearTimeout(timeout);
@@ -104,9 +103,9 @@ async function processStudents(students) {
                         result: parsedData.result
                     };
 
+                    // console.log(payload);
                     const apiResponse = await callLaravelApi(payload);
-                    // console.log('📥 Laravel Response:', apiResponse);
-
+                    // console.log(`✅ API response for ${enrollment}:`, apiResponse);
                     if (apiResponse.success) {
                         successCount++;
                     } else {

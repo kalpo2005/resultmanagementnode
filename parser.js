@@ -61,6 +61,9 @@ function parseResultTable(html) {
                     sgpa = $(row).find('font').text().match(/SGPA:\s*([\d.]+)/)?.[1] || '';
                     finalResult = $(row).find('font').text().match(/Result:\s*([A-Za-z]+)/)?.[1] || '';
                     return;
+                } else {
+                    sgpa = 0;
+                    finalResult = $(row).find('font').text().match(/Result:\s*([A-Za-z]+)/)?.[1] || '';
                 }
 
                 // Skip if not a valid subject row
@@ -78,10 +81,10 @@ function parseResultTable(html) {
                     see_obtained: $(cols[7]).text().trim(),
                     total_max_min: $(cols[8]).text().trim(),
                     total_obtained: $(cols[9]).text().trim(),
-                    marks_percentage: $(cols[10]).text().trim(),
-                    letter_grade: $(cols[11]).text().trim(),
-                    grade_point: $(cols[12]).text().trim(),
-                    credit_point: $(cols[13]).text().trim()
+                    marks_percentage: $(cols[10]).text().trim() || 0.00,
+                    letter_grade: $(cols[11]).text().trim() || 'F',
+                    grade_point: $(cols[12]).text().trim() || 0.00,
+                    credit_point: $(cols[13]).text().trim() || 0.00
                 });
             });
         }
