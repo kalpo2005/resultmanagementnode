@@ -67,6 +67,7 @@ async function processStudents(students) {
                     await frame.click('input[name="search_seat_no"][value="View Result"]');
 
                     // ✅ Race between result table and error message
+                    // ✅ Race between result table and error message
                     const resultOrError = await Promise.race([
                         frame.waitForSelector('table.print1', { timeout: 10000 }).then(() => 'table').catch(() => null),
                         frame.waitForSelector('#printContainer', { timeout: 10000 }).then(() => 'printContainer').catch(() => null)
@@ -75,13 +76,77 @@ async function processStudents(students) {
                     const pageContent = await frame.content();
 
                     if (resultOrError === 'printContainer') {
-                        // Check if error text is shown
                         if (pageContent.includes('Invalid SID') || pageContent.includes('Invalid Seat Number')) {
                             console.log(`❌ Invalid result for ${enrollment} / ${seatnumber}`);
                             failedEnrollments.push({ enrollment, seatnumber });
                             return; // skip API call
                         }
+
+                        if (pageContent.includes('Your Result is ABSENT')) {
+                            console.log(`⚠️ Absent result for ${enrollment} / ${seatnumber}`);
+
+                            const payload = {
+                                seatnumber,
+                                resultId,
+                                studentId,
+                                semesterId,
+                                examTypeId: 1,
+                                student: {
+                                    enrollment,
+                                    seatnumber,
+                                    status: 'ABSENT'
+                                },
+                                subjects: [
+                                    {
+                                        subject_code: 'ABS',
+                                        subject_name: 'ABSENT IN WHOLW EXAM',
+                                        subject_type: 'ALL',
+                                        credit: 0,
+                                        cce_max_min: 'AB',
+                                        cce_obtained: 0,
+                                        see_max_min: 'AB',
+                                        see_obtained: 0,
+                                        total_max_min: 'AB',
+                                        total_obtained: 0,
+                                        marks_percentage: 0,
+                                        letter_grade: 'F',
+                                        grade_point: 0,
+                                        credit_point: 0
+                                    }
+                                ],
+                                result: {
+                                    final_result: 'ABSENT',
+                                    total: {
+                                        cce_max_min: 'AB',
+                                        see_max_min: 'AB',
+                                        total_max_min: 'AB',
+                                        cce_obtained: 0,
+                                        see_obtained: 0,
+                                        total_obtained: 0
+                                    },
+                                    sgpa: 0
+                                }
+                            };
+
+                            // console.log(payload);
+                            const apiResponse = await callLaravelApi(payload);
+                            // console.log(`✅ API response for ${enrollment}:`, apiResponse);
+                            if (apiResponse.success) {
+                                successCount++;
+                            } else {
+                                failedEnrollments.push({ enrollment, seatnumber });
+                            }
+                            return;
+                        }
+
                     }
+
+                    if (resultOrError !== 'table') {
+                        console.log(`❌ No result table for ${enrollment} / ${seatnumber}`);
+                        failedEnrollments.push({ enrollment, seatnumber });
+                        return;
+                    }
+
 
                     if (resultOrError !== 'table') {
                         console.log(`❌ No result table for ${enrollment} / ${seatnumber}`);
