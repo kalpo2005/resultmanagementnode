@@ -128,9 +128,9 @@ async function processStudents(students) {
                                 }
                             };
 
-                            // console.log(payload);
+                           console.log("Payload",payload);
                             const apiResponse = await callLaravelApi(payload);
-                            // console.log(`✅ API response for ${enrollment}:`, apiResponse);
+                            console.log(`✅ API response for ${enrollment}:`, apiResponse);
                             if (apiResponse.success) {
                                 successCount++;
                             } else {
@@ -168,9 +168,9 @@ async function processStudents(students) {
                         result: parsedData.result
                     };
 
-                    // console.log(payload);
+                    console.log("Payload",payload);
                     const apiResponse = await callLaravelApi(payload);
-                    // console.log(`✅ API response for ${enrollment}:`, apiResponse);
+                    console.log(`✅ API response for ${enrollment}:`, apiResponse);
                     if (apiResponse.success) {
                         successCount++;
                     } else {
@@ -191,15 +191,15 @@ async function processStudents(students) {
 
     console.log(`✅ Done: ${successCount}, ❌ Failed: ${failedEnrollments.length}`);
 
-    if (failedEnrollments.length) {
-        const message = failedEnrollments
-            .map(f => `Enrollment: ${f.enrollment}, Seat: ${f.seatnumber}`)
-            .join('\n');
+    // if (failedEnrollments.length) {
+    //     const message = failedEnrollments
+    //         .map(f => `Enrollment: ${f.enrollment}, Seat: ${f.seatnumber}`)
+    //         .join('\n');
 
-        await sendMail('❌ Failed Student Results', message);
-    } else {
-        await sendMail('✅ All Students Processed Successfully', `Total: ${successCount}`);
-    }
+    //     await sendMail('❌ Failed Student Results', message);
+    // } else {
+    //     await sendMail('✅ All Students Processed Successfully', `Total: ${successCount}`);
+    // }
 }
 
 // API route
