@@ -1,25 +1,30 @@
-const express = require('express');
-const path = require('path');
-
-// Import routes
-const resultsRouter = require('./routes/results');
+const express = require("express");
+const cors = require("cors");
+const resultsRouter = require("./routes/results");
 
 const app = express();
 const PORT = 3000;
 
-// ✅ Middleware with increased JSON & URL-encoded body size limit
-app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+/* ✅ CORS middleware BEFORE routes */
+app.use(cors({
+    origin: "http://localhost",  // allow your PHP frontend
+    credentials: true,           // optional if you need cookies/auth
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
-// Routes
-app.use('/get-results', resultsRouter);
+/* Body parsers */
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Health check (optional)
-app.get('/', (req, res) => {
-    res.json({ status: true, message: 'Server is running 🚀' });
+/* Routes */
+app.use("/get-results", resultsRouter);
+
+/* Health check */
+app.get("/", (req, res) => {
+    res.json({ status: true, message: "Server running 🚀" });
 });
 
-// Start server
 app.listen(PORT, () => {
     console.log(`✅ Server running on http://localhost:${PORT}`);
 });

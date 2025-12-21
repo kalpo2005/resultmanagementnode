@@ -208,6 +208,7 @@ router.post('/', async (req, res) => {
     if (!students || !Array.isArray(students)) {
         return res.status(400).json({ status: false, message: 'Students array is required' });
     }
+    console.log(`🚀 Received ${students.length} students for processing`);
 
     // Immediate response
     res.json({ status: true, message: 'Processing started in background', total: students.length });
