@@ -8,7 +8,9 @@ const router = express.Router();
 
 // Helper to call Laravel API
 async function callLaravelApi(payload, timeoutMs = 10000) {
-    const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
+    // const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
+    const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
+
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -191,15 +193,15 @@ async function processStudents(students) {
 
     console.log(`✅ Done: ${successCount}, ❌ Failed: ${failedEnrollments.length}`);
 
-    // if (failedEnrollments.length) {
-    //     const message = failedEnrollments
-    //         .map(f => `Enrollment: ${f.enrollment}, Seat: ${f.seatnumber}`)
-    //         .join('\n');
+    if (failedEnrollments.length) {
+        const message = failedEnrollments
+            .map(f => `Enrollment: ${f.enrollment}, Seat: ${f.seatnumber}`)
+            .join('\n');
 
-    //     await sendMail('❌ Failed Student Results', message);
-    // } else {
-    //     await sendMail('✅ All Students Processed Successfully', `Total: ${successCount}`);
-    // }
+        await sendMail('❌ Failed Student Results', message);
+    } else {
+        await sendMail('✅ All Students Processed Successfully', `Total: ${successCount}`);
+    }
 }
 
 // API route
