@@ -1,0 +1,14 @@
+{
+  "students": [
+    {
+      "enrollment": "5058230006",
+      "semesterId": "6",
+      "courseId": "2125"
+    },
+    {
+      "enrollment": "5055230002",
+      "semesterId": "6",
+      "courseId": "2125"
+    }
+  ]
+}

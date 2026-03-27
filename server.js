@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const resultsRouter = require("./routes/results");
+const hallticketRouter = require("./routes/halltickets");
 
 const app = express();
 const PORT = 3000;
@@ -19,6 +20,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 /* Routes */
 app.use("/get-results", resultsRouter);
+app.use("/generate-halltickets", hallticketRouter);
 
 /* Health check */
 app.get("/", (req, res) => {
