@@ -1,3 +1,5 @@
 node_modules/
 .env
 dist/
+halltickets_sem6_2026/
+test_100_students.json

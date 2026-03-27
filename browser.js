@@ -15,7 +15,14 @@ function getBrowserPath() {
 async function launchBrowser() {
     return await puppeteer.launch({
         headless: true,
-        executablePath: getBrowserPath()
+        executablePath: getBrowserPath(),
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-web-security',          // allows cross-origin images in PDF
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-dev-shm-usage'
+        ]
     });
 }
 
