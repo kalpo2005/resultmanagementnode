@@ -1,13 +1,4 @@
-/**
- * Hall Ticket Downloader Route
- * POST /generate-halltickets
- *
- * Target: https://mkbhavuni.edu.in/bhavuni-academic-new/online-hallticket/index.php
- *
- * Portal DOM structure (confirmed):
- *   Page 1: #print_button, #tblInstruct, <div style="page-break-after:always;">
- *   Page 2: .ColHeaderName (logo+title), #tblInfo, #tblSubject, photo, QR code
- */
+
 
 const express = require('express');
 const path = require('path');
@@ -23,7 +14,7 @@ const router = express.Router();
 // ─── Config ──────────────────────────────────────────────────────────────────
 const HALLTICKET_URL = 'https://mkbhavuni.edu.in/bhavuni-academic-new/online-hallticket/index.php';
 const MAX_CONCURRENCY = 5;  // parallel browsers → 200 tickets in ~1-2 min
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 1;
 const PAGE_TIMEOUT = 30000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -259,28 +250,31 @@ async function processHallTickets(students) {
     }
 
     const succeeded = results.filter(r => r.success);
-    const failed    = results.filter(r => !r.success);
+    const failed = results.filter(r => !r.success);
 
     console.log(`\n✅ Hall Tickets Done → Success: ${succeeded.length}, ❌ Failed: ${failed.length}`);
 
     // ── Save failed students JSON for easy retry ──────────────────────────────
     if (failed.length > 0) {
         // Build retry-ready objects (same shape that the API accepts)
-        const failedStudentsList = students.filter(s =>
-            failed.some(f => String(f.enrollment) === String(s.enrollment))
-        ).map(s => ({
-            enrollment: s.enrollment,
-            semesterId: s.semesterId,
-            courseId:   s.courseId,
-            // failReason: (failed.find(f => String(f.enrollment) === String(s.enrollment)) || {}).error || 'Unknown'
-        }));
+        const failedStudentsList = students
+            .filter(s => failed.some(f => String(f.enrollment) === String(s.enrollment)))
+            .map(s => {
+                const match = failed.find(f => String(f.enrollment) === String(s.enrollment));
+                return {
+                    enrollment: s.enrollment,
+                    semesterId: s.semesterId,
+                    courseId: s.courseId,
+                    failReason: match?.error || 'Unknown'
+                };
+            });
 
-        const year       = new Date().getFullYear();
-        const failDir    = path.join(process.cwd(), `halltickets/${year}`);
+        const year = new Date().getFullYear();
+        const failDir = path.join(process.cwd(), `halltickets/${year}`);
         if (!fs.existsSync(failDir)) fs.mkdirSync(failDir, { recursive: true });
 
-        const timestamp  = new Date().toISOString().replace(/[:.]/g, '-');
-        const failFile   = path.join(failDir, `failed_students_${timestamp}.json`);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const failFile = path.join(failDir, `failed_students_${timestamp}.json`);
         fs.writeFileSync(failFile, JSON.stringify(failedStudentsList, null, 2), 'utf8');
         console.log(`💾 Failed list saved → ${failFile}  (${failed.length} student${failed.length > 1 ? 's' : ''})`);
     }
