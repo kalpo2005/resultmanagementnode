@@ -1,0 +1,14 @@
+[
+  {
+    "enrollment": 4053230090,
+    "semesterId": 4,
+    "courseId": 2125,
+    "failReason": "Waiting for selector `#tblInfo, #tblSubject, .ColHeaderName` failed"
+  },
+  {
+    "enrollment": 5053230016,
+    "semesterId": 4,
+    "courseId": 2125,
+    "failReason": "Waiting for selector `#tblInfo, #tblSubject, .ColHeaderName` failed"
+  }
+]
