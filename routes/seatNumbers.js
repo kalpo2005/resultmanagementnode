@@ -56,6 +56,18 @@ function loadExcelMappings() {
  * Append new {enrollment, seatNumber} rows to the Excel file.
  * Preserves existing rows and simply adds new ones at the bottom.
  */
+/**
+ * Split a full name in "SURNAME FIRSTNAME MIDDLENAME" format into parts.
+ * Handles 1-word, 2-word, and 3+-word names gracefully.
+ */
+function splitStudentName(fullName = '') {
+    const parts = fullName.trim().split(/\s+/);
+    const surname    = parts[0]  || '';
+    const firstName  = parts[1]  || '';
+    const middleName = parts.slice(2).join(' ') || '';
+    return { surname, firstName, middleName };
+}
+
 function appendToExcel(newRows) {
     if (!newRows || newRows.length === 0) return;
 
@@ -73,21 +85,30 @@ function appendToExcel(newRows) {
         }
     }
 
-    const mappedNew = newRows.map(r => ({
-        'Enrollment Number': r.enrollment,
-        'Seat Number': r.seatNumber,
-        'Semester': r.semesterId,
-        'Course ID': r.courseId,
-        'Fetched At': new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-    }));
+    const mappedNew = newRows.map(r => {
+        const { surname, firstName, middleName } = splitStudentName(r.studentName);
+        return {
+            'Seat No':     r.seatNumber,
+            'Enrollment No': r.enrollment,
+            'Surname':     surname,
+            'First Name':  firstName,
+            'Middle Name': middleName,
+            'Semester':    r.semesterId,
+            'Course ID':   r.courseId,
+            'Fetched At':  new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+        };
+    });
 
     const allRows = [...existingRows, ...mappedNew];
     const ws = XLSX.utils.json_to_sheet(allRows);
 
     // Style column widths
     ws['!cols'] = [
-        { wch: 22 }, // Enrollment Number
-        { wch: 16 }, // Seat Number
+        { wch: 16 }, // Seat No
+        { wch: 22 }, // Enrollment No
+        { wch: 20 }, // Surname
+        { wch: 20 }, // First Name
+        { wch: 20 }, // Middle Name
         { wch: 12 }, // Semester
         { wch: 12 }, // Course ID
         { wch: 24 }, // Fetched At
@@ -171,30 +192,45 @@ async function fetchSeatNumber(browser, student, attempt = 1) {
         await page.waitForSelector('#tblInfo, #tblSubject, .ColHeaderName', { timeout: 25000 });
         console.log(`  ✅ [${enrollment}] Hall ticket DOM loaded`);
 
-        // ── 8. Extract Seat Number ────────────────────────────────────────────
-        // Targets: <th align="right" ...>SEAT NUMBER : <font size="+1">26860604</font></th>
-        const seatNumber = await page.evaluate(() => {
+        // ── 8. Extract Seat Number & Student Name ─────────────────────────────
+        // Seat:  <th align="right">SEAT NUMBER : <font size="+1">26860604</font></th>
+        // Name:  <th align="left" colspan="2">STUDENT NAME : BAVALIYA KALPESHBHAI JAGDISHBHAI</th>
+        const { seatNumber, studentName } = await page.evaluate(() => {
             const allTh = Array.from(document.querySelectorAll('th'));
+            let seatNumber  = null;
+            let studentName = null;
+
             for (const th of allTh) {
-                if (th.textContent.includes('SEAT NUMBER')) {
+                const text = th.textContent.trim();
+
+                if (!seatNumber && text.includes('SEAT NUMBER')) {
                     const font = th.querySelector('font');
-                    if (font) return font.textContent.trim();
-                    // Fallback: parse raw text after colon
-                    const match = th.textContent.match(/SEAT NUMBER\s*:\s*(\S+)/);
-                    if (match) return match[1].trim();
+                    if (font) {
+                        seatNumber = font.textContent.trim();
+                    } else {
+                        const m = text.match(/SEAT NUMBER\s*:\s*(\S+)/);
+                        if (m) seatNumber = m[1].trim();
+                    }
                 }
+
+                if (!studentName && text.includes('STUDENT NAME')) {
+                    const m = text.match(/STUDENT NAME\s*:\s*(.+)/);
+                    if (m) studentName = m[1].trim();
+                }
+
+                if (seatNumber && studentName) break;
             }
-            return null;
+
+            return { seatNumber, studentName };
         });
 
         if (!seatNumber) {
-            // Dump page text for debugging
             const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 300));
             throw new Error(`Seat number not found in DOM. Page text: ${bodyText}`);
         }
 
-        console.log(`  🎯 [${enrollment}] Seat Number: ${seatNumber}`);
-        return { success: true, enrollment, seatNumber, semesterId, courseId };
+        console.log(`  🎯 [${enrollment}] Seat: ${seatNumber} | Name: ${studentName}`);
+        return { success: true, enrollment, seatNumber, studentName: studentName || '', semesterId, courseId };
 
     } catch (err) {
         if (attempt < MAX_RETRIES) {
