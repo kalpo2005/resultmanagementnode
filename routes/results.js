@@ -1,6 +1,6 @@
 const express = require('express');
 const { launchBrowser } = require('../browser');
-const { parseResultTable } = require('../parser');
+const { parseResultTable, parseResultTableSem6 } = require('../parser');
 const PQueue = require('p-queue').default;
 const { sendMail } = require('../mailer');
 
@@ -11,14 +11,15 @@ async function callLaravelApi(payload, timeoutMs = 10000) {
     // const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
     // const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
     const apiUrl = 'https:/bsc.studymotion.in/api/result/subject/autocreate';
-    const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2JzYy5zdHVkeW1vdGlvbi5pbi9hcGkvbG9naW5hZG1pbiIsImlhdCI6MTc3ODMzMTI2NywiZXhwIjoxNzc4MzM0ODY3LCJuYmYiOjE3NzgzMzEyNjcsImp0aSI6Ikt3WEhFT3YyZmhsaHROZHAiLCJzdWIiOiIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsImFjdG9yX3R5cGUiOiJ1c2VyIn0.nn2YHyhO9YvsA_DQbNXTctQiIVSCE7Wg6Y21fYiV8A8';
 
-
+    const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2JzYy5zdHVkeW1vdGlvbi5pbi9hcGkvbG9naW5hZG1pbiIsImlhdCI6MTc3ODM0NTE1MSwiZXhwIjoxNzc4MzQ4NzUxLCJuYmYiOjE3NzgzNDUxNTEsImp0aSI6IlJCQzFZWjlLTEcyVXdYcHoiLCJzdWIiOiIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsImFjdG9yX3R5cGUiOiJ1c2VyIn0.ESICrVhOllSl1Md9OM4C4BWY_Z001V4A1cMyncXfGXs';
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+        console.log("Payload", payload);
+
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -52,7 +53,7 @@ async function processStudents(students) {
     await Promise.all(
         students.map(student =>
             queue.add(async () => {
-                const { enrollment, seatnumber, resultId, studentId, semesterId } = student;
+                const { enrollment, seatnumber, resultId, studentId, semesterId, examTypeId } = student;
                 const page = await browser.newPage();
 
                 try {
@@ -98,7 +99,7 @@ async function processStudents(students) {
                                 resultId,
                                 studentId,
                                 semesterId,
-                                examTypeId: 1,
+                                examTypeId: examTypeId,
                                 student: {
                                     enrollment,
                                     seatNumber: seatnumber,
@@ -136,7 +137,7 @@ async function processStudents(students) {
                                 }
                             };
 
-                            console.log("Payload", payload);
+
                             const apiResponse = await callLaravelApi(payload);
                             console.log(`✅ API response for ${enrollment}:`, apiResponse);
                             if (apiResponse.success) {
@@ -162,23 +163,26 @@ async function processStudents(students) {
                         return;
                     }
 
-                    // ✅ Parse valid result
-                    const parsedData = parseResultTable(pageContent);
+                    // ✅ Choose parser based on semesterId
+                    const parsedData = semesterId === 6
+                        ? parseResultTableSem6(pageContent)
+                        : parseResultTable(pageContent);
 
                     const payload = {
                         seatNumber: seatnumber,
                         resultId,
                         studentId,
                         semesterId,
-                        examTypeId: parsedData.student.examTypeId || 1,
+                        examTypeId: examTypeId,
                         student: parsedData.student,
                         subjects: parsedData.subjects,
                         result: parsedData.result
                     };
 
-                    console.log("Payload", payload);
                     const apiResponse = await callLaravelApi(payload);
                     console.log(`✅ API response for ${enrollment}:`, apiResponse);
+
+
                     if (apiResponse.success) {
                         successCount++;
                     } else {
