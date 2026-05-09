@@ -9,7 +9,10 @@ const router = express.Router();
 // Helper to call Laravel API
 async function callLaravelApi(payload, timeoutMs = 10000) {
     // const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
-    const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
+    // const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
+    const apiUrl = 'https:/bsc.studymotion.in/api/result/subject/autocreate';
+    const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2JzYy5zdHVkeW1vdGlvbi5pbi9hcGkvbG9naW5hZG1pbiIsImlhdCI6MTc3ODMzMTI2NywiZXhwIjoxNzc4MzM0ODY3LCJuYmYiOjE3NzgzMzEyNjcsImp0aSI6Ikt3WEhFT3YyZmhsaHROZHAiLCJzdWIiOiIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsImFjdG9yX3R5cGUiOiJ1c2VyIn0.nn2YHyhO9YvsA_DQbNXTctQiIVSCE7Wg6Y21fYiV8A8';
+
 
 
     const controller = new AbortController();
@@ -18,7 +21,10 @@ async function callLaravelApi(payload, timeoutMs = 10000) {
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + jwtToken
+            },
             body: JSON.stringify(payload),
             signal: controller.signal
         });
@@ -88,14 +94,14 @@ async function processStudents(students) {
                             console.log(`⚠️ Absent result for ${enrollment} / ${seatnumber}`);
 
                             const payload = {
-                                seatnumber,
+                                seatNumber: seatnumber,
                                 resultId,
                                 studentId,
                                 semesterId,
                                 examTypeId: 1,
                                 student: {
                                     enrollment,
-                                    seatnumber,
+                                    seatNumber: seatnumber,
                                     status: 'ABSENT'
                                 },
                                 subjects: [
@@ -109,7 +115,7 @@ async function processStudents(students) {
                                         see_max_min: 'AB',
                                         see_obtained: 'AB',
                                         total_max_min: 'AB',
-                                        total_obtained:'AB',
+                                        total_obtained: 'AB',
                                         marks_percentage: 0,
                                         letter_grade: 'F',
                                         grade_point: 0,
@@ -130,7 +136,7 @@ async function processStudents(students) {
                                 }
                             };
 
-                           console.log("Payload",payload);
+                            console.log("Payload", payload);
                             const apiResponse = await callLaravelApi(payload);
                             console.log(`✅ API response for ${enrollment}:`, apiResponse);
                             if (apiResponse.success) {
@@ -160,7 +166,7 @@ async function processStudents(students) {
                     const parsedData = parseResultTable(pageContent);
 
                     const payload = {
-                        seatnumber,
+                        seatNumber: seatnumber,
                         resultId,
                         studentId,
                         semesterId,
@@ -170,7 +176,7 @@ async function processStudents(students) {
                         result: parsedData.result
                     };
 
-                    console.log("Payload",payload);
+                    console.log("Payload", payload);
                     const apiResponse = await callLaravelApi(payload);
                     console.log(`✅ API response for ${enrollment}:`, apiResponse);
                     if (apiResponse.success) {
