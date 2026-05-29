@@ -9,10 +9,10 @@ const router = express.Router();
 // Helper to call Laravel API
 async function callLaravelApi(payload, timeoutMs = 10000) {
     // const apiUrl = 'http://localhost:8000/api/result/subject/autocreate';
-    // const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
-    const apiUrl = 'https:/bsc.studymotion.in/api/result/subject/autocreate';
+    const apiUrl = 'https:/result.studymotion.in/api/result/subject/autocreate';
+    // const apiUrl = 'https:/bsc.studymotion.in/api/result/subject/autocreate';
 
-    const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2JzYy5zdHVkeW1vdGlvbi5pbi9hcGkvbG9naW5hZG1pbiIsImlhdCI6MTc3ODM0NTE1MSwiZXhwIjoxNzc4MzQ4NzUxLCJuYmYiOjE3NzgzNDUxNTEsImp0aSI6IlJCQzFZWjlLTEcyVXdYcHoiLCJzdWIiOiIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsImFjdG9yX3R5cGUiOiJ1c2VyIn0.ESICrVhOllSl1Md9OM4C4BWY_Z001V4A1cMyncXfGXs';
+    const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL3Jlc3VsdC5zdHVkeW1vdGlvbi5pbi9hcGkvbG9naW5hZG1pbiIsImlhdCI6MTc4MDA3MDU0NSwiZXhwIjoxNzgwMDc0MTQ1LCJuYmYiOjE3ODAwNzA1NDUsImp0aSI6IkRSN0hRSnBDdThXOTJIUDciLCJzdWIiOiIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsImFjdG9yX3R5cGUiOiJ1c2VyIiwiY29sbGVnZUlkIjpudWxsLCJyb2xlQWxpYXMiOiJzdXBlci1hZG1pbiIsInJvbGVMZXZlbCI6MSwicGVybWlzc2lvbnMiOltdfQ.IDFTI4KEzTf_jZgyLrustuX_tm_rwrogdseLoWSdlE0';
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);

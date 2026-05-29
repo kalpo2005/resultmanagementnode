@@ -14,48 +14,48 @@ const HALLTICKET_URL = 'https://mkbhavuni.edu.in/bhavuni-academic-new/online-hal
 const MAX_CONCURRENCY = 5;
 const MAX_RETRIES = 2;
 const PAGE_TIMEOUT = 30000;
-const EXCEL_FILE = path.join(process.cwd(), 'seat_numbers.xlsx');
+const SEATNUMBER_DIR = path.join(process.cwd(), 'seatnumber');
 const SHEET_NAME = 'SeatNumbers';
 
 // ─── Excel Helpers ────────────────────────────────────────────────────────────
 
 /**
- * Load existing seat number mappings from excel.
+ * Load existing seat number mappings from all excel files in the seatnumber directory.
  * Returns a Map<enrollment, seatNumber> for O(1) lookups.
  */
 function loadExcelMappings() {
     const map = new Map();
 
-    if (!fs.existsSync(EXCEL_FILE)) {
-        console.log('📂 seat_numbers.xlsx not found – will create fresh.');
+    if (!fs.existsSync(SEATNUMBER_DIR)) {
+        console.log('📂 seatnumber directory not found – will create fresh.');
         return map;
     }
 
     try {
-        const wb = XLSX.readFile(EXCEL_FILE);
-        const ws = wb.Sheets[SHEET_NAME];
-        if (!ws) return map;
+        const files = fs.readdirSync(SEATNUMBER_DIR).filter(f => f.endsWith('.xlsx'));
+        for (const file of files) {
+            const filePath = path.join(SEATNUMBER_DIR, file);
+            const wb = XLSX.readFile(filePath);
+            const ws = wb.Sheets[SHEET_NAME];
+            if (!ws) continue;
 
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        for (const row of rows) {
-            const enrollment = String(row['Enrollment Number'] || '').trim();
-            const seat = String(row['Seat Number'] || '').trim();
-            if (enrollment && seat) {
-                map.set(enrollment, seat);
+            const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            for (const row of rows) {
+                const enrollment = String(row['Enrollment No'] || row['Enrollment Number'] || '').trim();
+                const seat = String(row['Seat No'] || row['Seat Number'] || '').trim();
+                if (enrollment && seat) {
+                    map.set(enrollment, seat);
+                }
             }
         }
-        console.log(`📊 Loaded ${map.size} existing seat mappings from Excel.`);
+        console.log(`📊 Loaded ${map.size} existing seat mappings from Excel files inside seatnumber directory.`);
     } catch (err) {
-        console.error('⚠️  Failed to read Excel file:', err.message);
+        console.error('⚠️  Failed to read Excel files from seatnumber directory:', err.message);
     }
 
     return map;
 }
 
-/**
- * Append new {enrollment, seatNumber} rows to the Excel file.
- * Preserves existing rows and simply adds new ones at the bottom.
- */
 /**
  * Split a full name in "SURNAME FIRSTNAME MIDDLENAME" format into parts.
  * Handles 1-word, 2-word, and 3+-word names gracefully.
@@ -68,57 +68,79 @@ function splitStudentName(fullName = '') {
     return { surname, firstName, middleName };
 }
 
+/**
+ * Append new {enrollment, seatNumber} rows to their respective semester Excel files.
+ * Preserves existing rows and simply adds new ones at the bottom.
+ */
 function appendToExcel(newRows) {
     if (!newRows || newRows.length === 0) return;
 
-    let existingRows = [];
-
-    if (fs.existsSync(EXCEL_FILE)) {
-        try {
-            const wb = XLSX.readFile(EXCEL_FILE);
-            const ws = wb.Sheets[SHEET_NAME];
-            if (ws) {
-                existingRows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-            }
-        } catch (err) {
-            console.error('⚠️  Could not read existing Excel for append:', err.message);
-        }
+    // Ensure seatnumber directory exists
+    if (!fs.existsSync(SEATNUMBER_DIR)) {
+        fs.mkdirSync(SEATNUMBER_DIR, { recursive: true });
     }
 
-    const mappedNew = newRows.map(r => {
-        const { surname, firstName, middleName } = splitStudentName(r.studentName);
-        return {
-            'Seat No':     r.seatNumber,
-            'Enrollment No': r.enrollment,
-            'Surname':     surname,
-            'First Name':  firstName,
-            'Middle Name': middleName,
-            'Semester':    r.semesterId,
-            'Course ID':   r.courseId,
-            'Fetched At':  new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-        };
-    });
+    // Group rows by semesterId
+    const rowsBySemester = {};
+    for (const r of newRows) {
+        const sem = r.semesterId || 'unknown';
+        if (!rowsBySemester[sem]) {
+            rowsBySemester[sem] = [];
+        }
+        rowsBySemester[sem].push(r);
+    }
 
-    const allRows = [...existingRows, ...mappedNew];
-    const ws = XLSX.utils.json_to_sheet(allRows);
+    for (const [semesterId, rows] of Object.entries(rowsBySemester)) {
+        const excelFile = path.join(SEATNUMBER_DIR, `Semester_${semesterId}.xlsx`);
+        let existingRows = [];
 
-    // Style column widths
-    ws['!cols'] = [
-        { wch: 16 }, // Seat No
-        { wch: 22 }, // Enrollment No
-        { wch: 20 }, // Surname
-        { wch: 20 }, // First Name
-        { wch: 20 }, // Middle Name
-        { wch: 12 }, // Semester
-        { wch: 12 }, // Course ID
-        { wch: 24 }, // Fetched At
-    ];
+        if (fs.existsSync(excelFile)) {
+            try {
+                const wb = XLSX.readFile(excelFile);
+                const ws = wb.Sheets[SHEET_NAME];
+                if (ws) {
+                    existingRows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                }
+            } catch (err) {
+                console.error(`⚠️  Could not read existing Excel for semester ${semesterId} append:`, err.message);
+            }
+        }
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, SHEET_NAME);
-    XLSX.writeFile(wb, EXCEL_FILE);
+        const mappedNew = rows.map(r => {
+            const { surname, firstName, middleName } = splitStudentName(r.studentName);
+            return {
+                'Seat No':     r.seatNumber,
+                'Enrollment No': r.enrollment,
+                'Surname':     surname,
+                'First Name':  firstName,
+                'Middle Name': middleName,
+                'Semester':    r.semesterId,
+                'Course ID':   r.courseId,
+                'Fetched At':  new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+            };
+        });
 
-    console.log(`💾 Excel updated – added ${newRows.length} row(s) → ${EXCEL_FILE}`);
+        const allRows = [...existingRows, ...mappedNew];
+        const ws = XLSX.utils.json_to_sheet(allRows);
+
+        // Style column widths
+        ws['!cols'] = [
+            { wch: 16 }, // Seat No
+            { wch: 22 }, // Enrollment No
+            { wch: 20 }, // Surname
+            { wch: 20 }, // First Name
+            { wch: 20 }, // Middle Name
+            { wch: 12 }, // Semester
+            { wch: 12 }, // Course ID
+            { wch: 24 }, // Fetched At
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, SHEET_NAME);
+        XLSX.writeFile(wb, excelFile);
+
+        console.log(`💾 Excel updated – added ${rows.length} row(s) to Semester ${semesterId} → ${excelFile}`);
+    }
 }
 
 // ─── Core Scraper ─────────────────────────────────────────────────────────────

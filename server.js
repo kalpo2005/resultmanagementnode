@@ -9,8 +9,7 @@ const PORT = 3000;
 
 /* ✅ CORS middleware BEFORE routes */
 app.use(cors({
-    origin: "http://localhost",  // allow your PHP frontend
-    credentials: true,           // optional if you need cookies/auth
+    origin: "*",                 // allow all origins
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
